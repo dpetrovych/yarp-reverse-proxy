@@ -33,6 +33,30 @@ internal static class YarpParser
         {
             HandleIngressRule(ingressContext, ingressContext.Endpoints, defaultSubsets, rule, configContext);
         }
+
+        foreach (var tls in spec?.Tls ?? Enumerable.Empty<V1IngressTLS>())
+        {
+            HandleIngressTls(ingressContext, tls, configContext);
+        }
+    }
+
+    private static void HandleIngressTls(YarpIngressContext ingressContext, V1IngressTLS tls, YarpConfigContext configContext)
+    {
+        if (tls?.SecretName is null)
+        {
+            return;
+        }
+
+        var secret = ingressContext.Secrets.SingleOrDefault(x => x.Name == tls.SecretName);
+        if (secret.Certificate is null)
+        {
+            return;
+        }
+
+        foreach (var host in tls.Hosts ?? Enumerable.Empty<string>())
+        {
+            configContext.Certificates.Add(host, secret.Certificate);
+        }
     }
 
     private static void HandleIngressRule(YarpIngressContext ingressContext, List<Endpoints> endpoints, IList<V1EndpointSubset> defaultSubsets, V1IngressRule rule, YarpConfigContext configContext)

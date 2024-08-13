@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Connections;
 
@@ -24,11 +25,13 @@ public interface IServerCertificateSelector
     /// </summary>
     /// <param name="certificateName">An identifier for the certificate that can be used to remove it.</param>
     /// <param name="certificate">The server certificate.</param>
+    [Obsolete($"Use Yarp.Kubernetes.Controller.Certificates.{nameof(IServerCertificateStore)} interface")]
     void AddCertificate(NamespacedName certificateName, X509Certificate2 certificate);
 
     /// <summary>
     /// Removes a certificate from the selector.
     /// </summary>
     /// <param name="certificateName">An identifier for the certificate that can be used to remove it.</param>
+    [Obsolete($"Use Yarp.Kubernetes.Controller.Certificates.{nameof(IServerCertificateStore)} interface")]
     void RemoveCertificate(NamespacedName certificateName);
 }

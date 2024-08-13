@@ -23,6 +23,7 @@ public class NamespaceCache
     private readonly Dictionary<string, IngressData> _ingressData = new Dictionary<string, IngressData>();
     private readonly Dictionary<string, ServiceData> _serviceData = new Dictionary<string, ServiceData>();
     private readonly Dictionary<string, Endpoints> _endpointsData = new Dictionary<string, Endpoints>();
+    private readonly Dictionary<string, TlsSecretData> _secretsData = new Dictionary<string, TlsSecretData>();
 
     public void Update(WatchEventType eventType, V1Ingress ingress)
     {
@@ -209,6 +210,7 @@ public class NamespaceCache
     {
         var endspointsList = new List<Endpoints>();
         var servicesList = new List<ServiceData>();
+        var secretsList = new List<TlsSecretData>();
 
         lock (_sync)
         {
@@ -234,14 +236,41 @@ public class NamespaceCache
                 }
             }
 
-            if (_serviceData.Count == 0)
+            if (ingress.Spec.Tls != null)
             {
-                data = default;
-                return false;
+                foreach (var tls in ingress.Spec.Tls)
+                {
+                    if (_secretsData.TryGetValue(tls.SecretName, out var secret))
+                    {
+                        secretsList.Add(secret);
+                    }
+                }
             }
 
-            data = new ReconcileData(ingress, servicesList, endspointsList);
+            data = new ReconcileData(ingress, servicesList, endspointsList, secretsList);
             return true;
+        }
+    }
+
+    internal void Update(WatchEventType eventType, V1Secret secret)
+    {
+        // Ignore secrets that are not TLS type
+        if (!TlsSecretData.IsTlsSecret(secret))
+        {
+            return;
+        }
+
+        lock (_sync)
+        {
+            if (eventType == WatchEventType.Added || eventType == WatchEventType.Modified)
+            {
+                _secretsData[secret.Name()] = new TlsSecretData(secret);
+            }
+            else if (eventType == WatchEventType.Deleted)
+            {
+                _secretsData.Remove(secret.Name());
+            }
+
         }
     }
 }

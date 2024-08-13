@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Yarp.Kubernetes.Controller.Caching;
+using Yarp.Kubernetes.Controller.Certificates;
 using Yarp.Kubernetes.Controller.Client;
 using Yarp.Kubernetes.Controller.Configuration;
 using Yarp.Kubernetes.Controller.Converters;
@@ -23,14 +24,15 @@ public partial class Reconciler : IReconciler
     private readonly ICache _cache;
     private readonly IUpdateConfig _updateConfig;
     private readonly IIngressResourceStatusUpdater _ingressResourceStatusUpdater;
+    private readonly ICertificateHelper _certificateHelper;
     private readonly ILogger<Reconciler> _logger;
 
-    public Reconciler(ICache cache, IUpdateConfig updateConfig, IIngressResourceStatusUpdater ingressResourceStatusUpdater, ILogger<Reconciler> logger)
+    public Reconciler(ICache cache, IUpdateConfig updateConfig, IIngressResourceStatusUpdater ingressResourceStatusUpdater, I ILogger<Reconciler> logger)
     {
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _updateConfig = updateConfig ?? throw new ArgumentNullException(nameof(updateConfig));
         _ingressResourceStatusUpdater = ingressResourceStatusUpdater ?? throw new ArgumentNullException(nameof(ingressResourceStatusUpdater));
-        _logger = logger;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task ProcessAsync(CancellationToken cancellationToken)
@@ -47,7 +49,7 @@ public partial class Reconciler : IReconciler
                 {
                     if (_cache.TryGetReconcileData(new NamespacedName(ingress.Metadata.NamespaceProperty, ingress.Metadata.Name), out var data))
                     {
-                        var ingressContext = new YarpIngressContext(ingress, data.ServiceList, data.EndpointsList);
+                        var ingressContext = new YarpIngressContext(ingress, data.ServiceList, data.EndpointsList, data.SecretsList);
                         YarpParser.ConvertFromKubernetesIngress(ingressContext, configContext);
                     }
                 }
@@ -63,6 +65,7 @@ public partial class Reconciler : IReconciler
             _logger.LogInformation(JsonSerializer.Serialize(clusters));
 
             await _updateConfig.UpdateAsync(configContext.Routes, clusters, cancellationToken).ConfigureAwait(false);
+
             await _ingressResourceStatusUpdater.UpdateStatusAsync(cancellationToken);
         }
         catch (Exception ex)

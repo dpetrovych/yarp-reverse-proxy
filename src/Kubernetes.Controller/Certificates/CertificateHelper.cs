@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Runtime.ConstrainedExecution;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -29,30 +30,59 @@ public class CertificateHelper : ICertificateHelper
             var cert = secret?.Data[TlsCertKey];
             var privateKey = secret?.Data[TlsPrivateKeyKey];
 
-            if (cert == null || cert.Length == 0 || privateKey == null || privateKey.Length == 0)
+            if (IsValidCertificateData(cert, privateKey))
             {
                 _logger.LogWarning("TLS secret '{NamespacedName}' contains invalid data.", namespacedName);
                 return null;
             }
 
-            var certString = EnsurePemFormat(cert, "CERTIFICATE");
-            var privateString = EnsurePemFormat(privateKey, "PRIVATE KEY");
+            return ConvertCertificate(cert, privateKey);
+        }
+        catch
+        {
+            _logger.LogWarning("Failed to convert secret '{NamespacedName}'", namespacedName);
+        }
+        return null;
+    }
 
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+    public static X509Certificate2 ConvertCertificate(V1Secret secret)
+    {
+        try
+        {
+            var cert = secret?.Data[TlsCertKey];
+            var privateKey = secret?.Data[TlsPrivateKeyKey];
+
+            if (IsValidCertificateData(cert, privateKey))
             {
-                // Cert needs converting. Read https://github.com/dotnet/runtime/issues/23749#issuecomment-388231655
-                using var convertedCertificate = X509Certificate2.CreateFromPem(certString, privateString);
-                return new X509Certificate2(convertedCertificate.Export(X509ContentType.Pkcs12));
+                return null;
             }
 
-            return X509Certificate2.CreateFromPem(certString, privateString);
+            return ConvertCertificate(cert, privateKey);
         }
-        catch (Exception ex)
+        catch
         {
-            _logger.LogWarning(ex, "Failed to convert secret '{NamespacedName}'", namespacedName);
+            return null;
+        }
+    }
+
+    private static X509Certificate2 ConvertCertificate(byte[] cert, byte[] privateKey)
+    {
+        var certString = EnsurePemFormat(cert, "CERTIFICATE");
+        var privateString = EnsurePemFormat(privateKey, "PRIVATE KEY");
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            // Cert needs converting. Read https://github.com/dotnet/runtime/issues/23749#issuecomment-388231655
+            using var convertedCertificate = X509Certificate2.CreateFromPem(certString, privateString);
+            return new X509Certificate2(convertedCertificate.Export(X509ContentType.Pkcs12));
         }
 
-        return null;
+        return X509Certificate2.CreateFromPem(certString, privateString);
+    }
+
+    private static bool IsValidCertificateData(byte[] cert, byte[] privateKey)
+    {
+        return cert == null || cert.Length == 0 || privateKey == null || privateKey.Length == 0;
     }
 
     /// <summary>
@@ -75,4 +105,5 @@ public class CertificateHelper : ICertificateHelper
 
         return der;
     }
+
 }
